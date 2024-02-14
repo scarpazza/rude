@@ -21,7 +21,7 @@ rude-store:
 
 fg: rudefs rude-mnt rude-store
 	echo "Mounting in foreground..."
-	./rudefs -f --backing=$(shell pwd)/rude-store $(shell pwd)/rude-mnt
+	./rudefs -f --stingy --backing=$(shell pwd)/rude-store $(shell pwd)/rude-mnt
 
 mount: rudefs rude-mnt rude-store
 	./rudefs --backing=$(shell pwd)/rude-store $(shell pwd)/rude-mnt
