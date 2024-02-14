@@ -1,3 +1,8 @@
+
+// TO DO:
+// rename
+// chmod
+
 #define _DEFAULT_SOURCE
 
 #define FUSE_USE_VERSION 31
@@ -37,9 +42,9 @@ static const struct fuse_opt option_spec[] = {
 static void *rude_init(struct fuse_conn_info *conn,
 			struct fuse_config *cfg)
 {
-	(void) conn;
-	cfg->kernel_cache = 1;
-	return NULL;
+  (void) conn;
+  cfg->kernel_cache = 1;
+  return NULL;
 }
 
 static int rude_getattr(const char *path,
@@ -174,17 +179,96 @@ static int rude_rmdir(const char *path)
   return 0;
 }
 
+static int rude_write(const char *path, const char *buf, size_t size,
+		      off_t offset, struct fuse_file_info *fi)
+// Pure pass-through
+{
+  int res;
+  (void) path;
+  res = pwrite(fi->fh, buf, size, offset);
+  if (res == -1)
+    res = -errno;
+  return res;
+}
+
+// copied from xmp_flush
+static int rude_flush(const char *path, struct fuse_file_info *fi)
+{
+  int res;
+  (void) path;
+  /* This is called from every close on an open file, so call the
+     close on the underlying filesystem. But since flush may be
+     called multiple times for an open file, this must not really
+     close the file.  This is important if used on a network
+     filesystem like NFS which flush the data/metadata on close() */
+  res = close(dup(fi->fh));
+  if (res == -1)
+    return -errno;
+  return 0;
+}
+
+/*static int rude_releasedir(const char *path, struct fuse_file_info *fi)
+{
+  struct xmp_dirp *d = get_dirp(fi);
+  (void) path;
+  closedir(d->dp);
+  free(d);
+  return 0;
+  }*/
+
+static int rude_mknod(const char *path, mode_t mode, dev_t rdev)
+{
+  int res;
+  if (strcmp(path, "/") == 0)        return -EPERM; // nothing to do
+  if ( chdir(options.backing) != 0 ) return -EBADFD;
+  if ( chdir("root") != 0)           return -EBADFD;
+
+  if (S_ISFIFO(mode))
+    res = mkfifo(path+1, mode);
+  else
+    res = mknod(path+1, mode, rdev);
+  if (res == -1)
+    return -errno;
+  return 0;
+}
+
+static int rude_utimens(const char *path, const struct timespec ts[2],
+			struct fuse_file_info *fi)
+{
+  int res;
+
+  /* don't use utime/utimes since they follow symlinks */
+  if (fi)
+    res = futimens(fi->fh, ts);
+  else {
+    if ( chdir(options.backing) != 0 ) return -EBADFD;
+    if ( chdir("root") != 0)           return -EBADFD;
+
+    if (strcmp(path, "/") == 0) {
+      res = utimensat(0, ".", ts, AT_SYMLINK_NOFOLLOW);
+    }
+    else
+      res = utimensat(0, path+1, ts, AT_SYMLINK_NOFOLLOW);
+  }
+
+  if (res == -1) return -errno;
+  return 0;
+}
 
 static const struct fuse_operations rude_oper = {
-	.init           = rude_init,
-	.getattr	= rude_getattr,
-	.mkdir          = rude_mkdir,
-	.rmdir          = rude_rmdir,
-	.readdir	= rude_readdir,
-	.lseek          = rude_lseek,
-	.open		= rude_open,
-	.read		= rude_read,
-	.release        = rude_release,
+  .init          = rude_init,
+  .getattr	 = rude_getattr,
+  .mkdir         = rude_mkdir,
+  .rmdir         = rude_rmdir,
+  .readdir	 = rude_readdir,
+  .flush         = rude_flush,
+  .lseek         = rude_lseek,
+  .open		 = rude_open,
+  .read		 = rude_read,
+  .mknod         = rude_mknod,
+  .write         = rude_write,
+  .release       = rude_release,
+  .utimens       = rude_utimens,
 };
 
 static void show_help(const char *progname)
