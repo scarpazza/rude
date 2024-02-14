@@ -1,5 +1,7 @@
 // TO DO:
-// rename
+// when chmod u-w, remove w from also g and o
+// + rename
+// + opendir
 
 #define _DEFAULT_SOURCE
 
@@ -20,6 +22,8 @@
 
 #include "rudefs.h" // hash_file
 
+
+
 /*
  * Command line options
  *
@@ -28,8 +32,9 @@
  * different values on the command line.
  */
 static struct options {
-  const char *backing;
-  const char *hash_function;
+  const char * backing;                  // backing store - requested
+  char         real_backing[PATH_MAX+1]; // backing store - realpath
+  const char * hash_function;
   int show_help;
 } options;
 
@@ -43,6 +48,47 @@ static const struct fuse_opt option_spec[] = {
 	FUSE_OPT_END
 };
 
+
+int deduplicate(const char * orig_path,
+		const char * hex_digest)
+{
+  struct stat st;
+  if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
+
+  char src_path[PATH_MAX+1];
+  char store_path[PATH_MAX+1];
+  snprintf(store_path, PATH_MAX, "%s/%s", STORE_SUBDIR, hex_digest);
+  snprintf(src_path,   PATH_MAX, "%s/%s",  ROOT_SUBDIR,  orig_path);
+  printf("rudefs: de-duplicating %s -> %s\n", src_path, store_path);
+
+  // to do lock
+  if ( stat(store_path, &st) != 0 ) {
+    // store file does not exist yet - move and link
+    if ( rename(src_path, store_path) != 0 ) {
+      fprintf(stderr, "rudefs: deduplicate: rename failed: %s\n", strerror (errno));
+      goto error;
+    }
+  } else {
+    // store file already exists - delete src
+    if ( remove(src_path) != 0 ) {
+      fprintf(stderr, "rudefs: deduplicate: remove failed: %s\n", strerror (errno));
+      goto error;
+    }
+  }
+
+  if ( link(store_path, src_path) != 0 ) {
+      fprintf(stderr, "rudefs: deduplicate: link failed: %s\n", strerror (errno));
+      goto error;
+
+  }
+  // to do release lock
+  printf("rudefs: SUCCESS de-duplicating %s -> %s\n", src_path, store_path);
+  return 0;
+ error:
+  // release lock
+  return -errno;
+}
+
 static void *rude_init(struct fuse_conn_info *conn,
 			struct fuse_config *cfg)
 {
@@ -51,7 +97,7 @@ static void *rude_init(struct fuse_conn_info *conn,
   return NULL;
 }
 
-static int rude_getattr(const char *path,
+static int rude_getattr(const  char *path,
 			struct stat *stbuf,
 			struct fuse_file_info *fi)
 {
@@ -59,7 +105,7 @@ static int rude_getattr(const char *path,
   printf("getattr requested path %s\n", path);
   memset(stbuf, 0, sizeof(struct stat));
 
-  if (chdir(options.backing) != 0)
+  if (chdir(options.real_backing) != 0)
     return -ENOMEDIUM; // this is the errno I use when the backing fs is not there
 
   if (fi)
@@ -88,7 +134,7 @@ static int rude_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
   struct dirent *entry;
 
-  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
   if ( chdir("root") != 0)           return -ENOMEDIUM;
   DIR * dir;
 
@@ -113,8 +159,8 @@ static int rude_open(const  char *path,
 {
   int fd;
   fprintf(stderr, "rude_open: %s\n", path);
-  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
-  if ( chdir("root") != 0)           return -ENOMEDIUM;
+  if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)                return -ENOMEDIUM;
 
   if (strcmp(path, "/") == 0)
     fd = open(".", fi->flags);
@@ -165,8 +211,8 @@ static int rude_mkdir(const char *path, mode_t mode)
   int res;
   fprintf(stderr, "rude_mkdir: %s\n", path);
   if (strcmp(path, "/") == 0) return 0; // nothing to do
-  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
-  if ( chdir("root") != 0)           return -ENOMEDIUM;
+  if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)                return -ENOMEDIUM;
   res = mkdir(path+1, mode); // TO DO SPLIT?
   if (res == -1) return -errno;
   return 0;
@@ -176,8 +222,8 @@ static int rude_rmdir(const char *path)
 {
   int res;
   if (strcmp(path, "/") == 0) return -EPERM; // you can't delete root
-  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
-  if ( chdir("root") != 0)           return -ENOMEDIUM;
+  if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)                return -ENOMEDIUM;
   res = rmdir(path+1);
   if (res == -1) return -errno;
   return 0;
@@ -223,9 +269,9 @@ static int rude_flush(const char *path, struct fuse_file_info *fi)
 static int rude_mknod(const char *path, mode_t mode, dev_t rdev)
 {
   int res;
-  if (strcmp(path, "/") == 0)        return -EPERM; // nothing to do
-  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
-  if ( chdir("root") != 0)           return -ENOMEDIUM;
+  if (strcmp(path, "/") == 0)             return -EPERM; // nothing to do
+  if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)                return -ENOMEDIUM;
 
   if (S_ISFIFO(mode))
     res = mkfifo(path+1, mode);
@@ -236,7 +282,8 @@ static int rude_mknod(const char *path, mode_t mode, dev_t rdev)
   return 0;
 }
 
-static int rude_utimens(const char *path, const struct timespec ts[2],
+static int rude_utimens(const char *path,
+			const struct timespec ts[2],
 			struct fuse_file_info *fi)
 {
   int res;
@@ -245,8 +292,8 @@ static int rude_utimens(const char *path, const struct timespec ts[2],
   if (fi)
     res = futimens(fi->fh, ts);
   else {
-    if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
-    if ( chdir("root") != 0)           return -ENOMEDIUM;
+    if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
+    if ( chdir("root") != 0)                return -ENOMEDIUM;
 
     if (strcmp(path, "/") == 0) {
       res = utimensat(0, ".", ts, AT_SYMLINK_NOFOLLOW);
@@ -261,14 +308,15 @@ static int rude_utimens(const char *path, const struct timespec ts[2],
 
 
 
-static int rude_chmod(const char *path, mode_t new_mode,
-		     struct fuse_file_info *fi)
+static int rude_chmod(const char *path,
+		      mode_t new_mode,
+		      struct fuse_file_info *fi)
 {
   int res;
 
-  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
-  if ( chdir("root") != 0)           return -ENOMEDIUM;
-  if (strcmp(path, "/") == 0)        return -EPERM;
+  if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)                return -ENOMEDIUM;
+  if (strcmp(path, "/") == 0)             return -EPERM;
   /*if(fi)
     res = fchmod(fi->fh, mode); */
 
@@ -281,8 +329,8 @@ static int rude_chmod(const char *path, mode_t new_mode,
       {
 	printf("rudefs: de-duplicating %s and link from hash-store, %s\n",
 	       path, options.hash_function);
-	unsigned char digest[EVP_MAX_MD_SIZE+1];
-	unsigned char hex_digest[EVP_MAX_MD_SIZE*2+1];
+	unsigned char digest     [EVP_MAX_MD_SIZE+1];
+	unsigned char hex_digest [EVP_MAX_MD_SIZE*2+1];
 	const int mdlen = hash_file(path+1, options.hash_function, digest);
 	if (mdlen < 0) return res;
 	if (mdlen ==0) return -EINVAL;
@@ -291,8 +339,8 @@ static int rude_chmod(const char *path, mode_t new_mode,
 	       sprint_hash(hex_digest, digest, mdlen),
 	       mdlen*8, mdlen, mdlen*2);
 	printf(";\n");
-	// unfinished
-	return -ENOSYS;
+	if ( (res = deduplicate(path+1, hex_digest)) <0)
+	  return res;
       }
   {
     printf("rude_chmod: %s\n", path);
@@ -333,15 +381,22 @@ static void show_help(const char *progname)
 	 "\n");
 }
 
-int verify_backing(const char * path)
+int verify_backing()
 {
-  printf("Verifying backing path %s\n", path);
-  if ( chdir(path) !=0 )
-    {
-      perror("rudefs: initial backing subdir verification");
-      return 0;
-    }
-  return 1;
+  printf("rudefs: verifying backing path %s\n", options.backing);
+  if ( realpath(options.backing,
+		options.real_backing) == 0) {
+    fprintf(stderr, "rudefs: realpath failed on defaults backing path %s: %s\n",
+	    options.backing, strerror(errno));
+    return -errno;
+  }
+  printf("rudefs: backing realpath: %s\n", options.real_backing);
+
+  if ( chdir(options.real_backing) !=0 ) {
+    perror("rudefs: initial backing subdir verification");
+    return -errno;
+  }
+  return 0;
 }
 
 int main(int argc, char *argv[])
@@ -370,8 +425,8 @@ int main(int argc, char *argv[])
     args.argv[0][0] = '\0';
   }
 
-  if (!verify_backing(options.backing))
-    return -1;
+  if ( (ret = verify_backing(options.backing)) <0)
+    return ret;
 
   ret = fuse_main(args.argc, args.argv, &rude_oper, NULL);
   fuse_opt_free_args(&args);
