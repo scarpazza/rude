@@ -79,9 +79,8 @@ static int rude_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
   struct dirent *entry;
 
-  chdir(options.backing); // to do check
-  chdir("root"); // to do check
-
+  if ( chdir(options.backing) != 0 ) return -EBADFD;
+  if ( chdir("root") != 0)           return -EBADFD;
   DIR * dir;
 
   printf("rude_readdir %s...\n", path);
@@ -96,10 +95,6 @@ static int rude_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     printf("rude_readdir: returning %s\n", entry->d_name);
     filler(buf, entry->d_name, NULL, 0, 0);
   }
-  //printf("  %s\n", entry->d_name);
-
-  //filler(buf, ".", NULL, 0, 0);
-  //filler(buf, "..", NULL, 0, 0);
   closedir(dir);
   return 0;
 }
@@ -109,10 +104,8 @@ static int rude_open(const  char *path,
 {
   int fd;
   fprintf(stderr, "rude_open: %s\n", path);
-  if ( chdir(options.backing) != 0 )
-    return -EBADFD;
-  if ( chdir("root") != 0)
-    return -EBADFD;
+  if ( chdir(options.backing) != 0 ) return -EBADFD;
+  if ( chdir("root") != 0)           return -EBADFD;
 
   if (strcmp(path, "/") == 0)
     fd = open(".", fi->flags);
@@ -147,10 +140,10 @@ static const struct fuse_operations rude_oper = {
 
 static void show_help(const char *progname)
 {
-	printf("usage: %s [options] <mountpoint>\n\n", progname);
-	printf("File-system specific options:\n"
-	       "    --backing=<s>      path to the backing\n"
-	       "\n");
+  printf("usage: %s [options] <mountpoint>\n\n", progname);
+  printf("File-system specific options:\n"
+	 "    --backing=<s>      path to the backing\n"
+	 "\n");
 }
 
 int verify_backing(const char * path)
