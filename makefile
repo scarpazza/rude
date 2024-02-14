@@ -1,7 +1,14 @@
 
+%.o: %.c
+	gcc -c $< -o $@ \
+	`pkg-config fuse3   --cflags` \
+	`pkg-config openssl --cflags`
 
-rudefs: src/rudefs.c
-	gcc src/rudefs.c -o rudefs `pkg-config fuse3 --cflags --libs`
+
+rudefs: src/rudefs.o src/hash_file.o
+	gcc $^ -o $@ \
+	`pkg-config fuse3   --libs` \
+	`pkg-config openssl --libs`
 
 rude-mnt:
 	mkdir -p $@
@@ -23,4 +30,3 @@ mount: rudefs rude-mnt rude-store
 unmount:
 	fusermount3 -u $(shell pwd)/rude-mnt
 	ls rude-mnt
-

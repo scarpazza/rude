@@ -14,7 +14,27 @@ of similar versions.
 
 It is designed to have minimum overhead on all operations, except `chmod u+w` and `u-w`.
 
-## prerequisites
-Install the development fuse3 libraries:
+## Guarantees
+None. This was just made for fun.  If you use it for anything else,
+you are rollerskating naked in a dark room full of sharp glass shards.
 
-        sudo apt install fuse3 libfuse3-dev
+## Prerequisites
+Before you try, ensure you have the fuse3 and openssl libraries
+development packages installed, e.g.:
+
+        sudo apt install fuse3 libfuse3-dev libssl-dev
+
+or the equivalent packages for your distribution.
+
+Openssl is needed for the hash functions. I'm picking up cryptographically
+strong functions out of laziness.
+
+## To do
+- proper testing harness
+- locking during critical deduplication replacement
+- large scale testing, e.g., with side-by-side pyvenv installs
+- properly review similar solutions
+- stats tool (dedup rates, space savings)
+- recovery tools (e.g., incoming link fail)
+- steal and implement whatever interesting ideas
+- minimum performance benchmarking

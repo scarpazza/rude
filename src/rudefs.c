@@ -1,13 +1,12 @@
-
 // TO DO:
 // rename
-// chmod
 
 #define _DEFAULT_SOURCE
 
 #define FUSE_USE_VERSION 31
 #define _POSIX_SOURCE
 
+#include <stdlib.h> // malloc
 #include <dirent.h>
 #include <fuse.h>
 #include <stdio.h>
@@ -17,7 +16,9 @@
 #include <stddef.h>
 #include <assert.h>
 #include <unistd.h> //chdir
-#include <sys/stat.h> // mode_t
+#include <sys/stat.h> // mode_t, fstat, lstat
+
+#include "rudefs.h" // hash_file
 
 /*
  * Command line options
@@ -27,14 +28,16 @@
  * different values on the command line.
  */
 static struct options {
-	const char *backing;
-	int show_help;
+  const char *backing;
+  const char *hash_function;
+  int show_help;
 } options;
 
 #define OPTION(t, p)                           \
     { t, offsetof(struct options, p), 1 }
 static const struct fuse_opt option_spec[] = {
 	OPTION("--backing=%s", backing),
+	OPTION("--hashfn=%s",  hash_function),
 	OPTION("-h", show_help),
 	OPTION("--help", show_help),
 	FUSE_OPT_END
@@ -256,6 +259,8 @@ static int rude_utimens(const char *path, const struct timespec ts[2],
   return 0;
 }
 
+
+
 static int rude_chmod(const char *path, mode_t new_mode,
 		     struct fuse_file_info *fi)
 {
@@ -273,8 +278,17 @@ static int rude_chmod(const char *path, mode_t new_mode,
     printf("Should duplicate and pull from to hash-store\n");
   else
     if ( ((old.st_mode & S_IWUSR) > 0) && ((new_mode & S_IWUSR) ==0))
-      printf("Should de-duplicate and link from hash-store\n");
+      {
+	printf("rudefs: de-duplicating %s and link from hash-store, %s\n",
+	       path, options.hash_function);
+	static unsigned char digest[EVP_MAX_MD_SIZE+1];
+	res = hash_file(path+1, options.hash_function, digest);
+	if (res < 0) return res;
 
+	printf("hash %s\n", digest);
+	// unfinished
+	return -ENOSYS;
+      }
   {
     printf("rude_chmod: %s\n", path);
     res = chmod(path+1, new_mode);
@@ -310,6 +324,7 @@ static void show_help(const char *progname)
   printf("usage: %s [options] <mountpoint>\n\n", progname);
   printf("File-system specific options:\n"
 	 "    --backing=<s>      path to the backing\n"
+	 "    --hashfn=<s>       hash function to use, e.g., SHA256\n"
 	 "\n");
 }
 
@@ -332,7 +347,8 @@ int main(int argc, char *argv[])
   /* Set defaults -- we have to use strdup so that
      fuse_opt_parse can free the defaults if other
      values are specified */
-  options.backing = strdup("rudefs-store");
+  options.backing       = strdup("rudefs-store");
+  options.hash_function = strdup("SHA256");
 
   /* Parse options */
   if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
