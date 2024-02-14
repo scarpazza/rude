@@ -1,5 +1,8 @@
+#define _DEFAULT_SOURCE
+
 #define FUSE_USE_VERSION 31
 #define _POSIX_SOURCE
+
 #include <dirent.h>
 #include <fuse.h>
 #include <stdio.h>
@@ -43,110 +46,95 @@ static int rude_getattr(const char *path,
 			struct stat *stbuf,
 			struct fuse_file_info *fi)
 {
-	(void) fi;
-	int res = 0;
+  int res = 0;
+  printf("getattr requested path %s\n", path);
+  memset(stbuf, 0, sizeof(struct stat));
 
-	printf("getattr requested path %s\n", path);
-	memset(stbuf, 0, sizeof(struct stat));
+  if (chdir(options.backing) != 0)
+    return -EBADFD; // this is the errno I use when the backing fs is not there
 
-	chdir(options.backing); // to do check
+  if (fi)
+    res = fstat(fi->fh, stbuf);
+  else if (strcmp(path, "/") == 0)
+    res = lstat("root", stbuf);
+  else {
+    if ( chdir("root") != 0) return -EBADFD;
+    res = lstat(path+1, stbuf);
+  }
+  if (res == -1)
+    return -errno;
+  else
+    return res;
 
-	if (strcmp(path, "/") == 0)
-	  return stat("root", stbuf);
-
-	chdir("root");
-	return stat(path+1, stbuf);
-
-	/*else
-	  res = -ENOENT;*/
-
-	return res;
+  /*else res = -ENOENT;*/
 }
 
 static int rude_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			 off_t offset, struct fuse_file_info *fi,
 			 enum fuse_readdir_flags flags)
 {
-	(void) offset;
-	(void) fi;
-	(void) flags;
+  (void) offset;
+  (void) fi;
+  (void) flags;
 
-	struct dirent *entry;
+  struct dirent *entry;
 
-	chdir(options.backing); // to do check
-	chdir("root"); // to do check
+  chdir(options.backing); // to do check
+  chdir("root"); // to do check
 
-	DIR * dir;
+  DIR * dir;
 
-	printf("rude_readdir %s...\n", path);
-	if (strcmp(path, "/") == 0) {
-	    dir = opendir(".");
-	} else {
-	  dir = opendir(path+1);
-	}
-	if (!dir) return -ENOENT;
+  printf("rude_readdir %s...\n", path);
+  if (strcmp(path, "/") == 0) {
+    dir = opendir(".");
+  } else {
+    dir = opendir(path+1);
+  }
+  if (!dir) return -ENOENT;
 
-	while ((entry = readdir(dir)) != NULL) {
-	  printf("rude_readdir: returning %s\n", entry->d_name);
-	  filler(buf, entry->d_name, NULL, 0, 0);
-	}
-	  //printf("  %s\n", entry->d_name);
+  while ((entry = readdir(dir)) != NULL) {
+    printf("rude_readdir: returning %s\n", entry->d_name);
+    filler(buf, entry->d_name, NULL, 0, 0);
+  }
+  //printf("  %s\n", entry->d_name);
 
-	  //filler(buf, ".", NULL, 0, 0);
-	  //filler(buf, "..", NULL, 0, 0);
-	closedir(dir);
-	return 0;
+  //filler(buf, ".", NULL, 0, 0);
+  //filler(buf, "..", NULL, 0, 0);
+  closedir(dir);
+  return 0;
 }
 
-static int rude_open(const char *path, struct fuse_file_info *fi)
+static int rude_open(const  char *path,
+		     struct fuse_file_info *fi)
 {
+  int fd;
   fprintf(stderr, "rude_open: %s\n", path);
+  if ( chdir(options.backing) != 0 )
+    return -EBADFD;
+  if ( chdir("root") != 0)
+    return -EBADFD;
+
+  if (strcmp(path, "/") == 0)
+    fd = open(".", fi->flags);
+  else
+    fd = open(path+1, fi->flags);
+
+  if (fd == -1) return -errno;
+
+  fi->fh = fd;
   return 0;
-  // TO DO CHECK
-
-  //if (strcmp(path+1, options.filename) != 0)
-  // return -ENOENT;
-
-	if ((fi->flags & O_ACCMODE) != O_RDONLY)
-		return -EACCES;
-
-	return 0;
 }
 
 static int rude_read(const char *path, char *buf,
 		     size_t size, off_t offset,
 		     struct fuse_file_info *fi)
 {
-  size_t len;
-  (void) fi;
-
-  // TO DO handle /
-
-  if ( chdir(options.backing)!=0 ) {
-    perror("rude_read: chdir into backing dir failed");
-    return -errno;
-  }
-  if ( chdir("root") != 0) {
-    perror("rude_read: chdir into failed");
-    return -errno;
-  }
-
-  FILE * f = fopen(path+1, "rb");
-  if (!f)
-    return -ENOENT;
-  fseek(f, 0, SEEK_END);
-  len = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  if (offset < len) {
-    if (offset + size > len)
-      size = len - offset;
-    fread( buf, size, 1, f);
-    //memcpy(buf, contents + offset, size);
-  } else
-    size = 0;
-  fclose(f);
-
-  return size;
+  int res;
+  (void) path;
+  res = pread(fi->fh, buf, size, offset);
+  if (res == -1)
+    res = -errno;
+  return res;
 }
 
 static const struct fuse_operations rude_oper = {
