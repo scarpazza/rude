@@ -29,6 +29,15 @@ or the equivalent packages for your distribution.
 Openssl is needed for the hash functions. I'm picking up cryptographically
 strong functions out of laziness.
 
+## Usage
+
+- run `make mount` to build the software and mount the filesystem under `./rude-mnt`
+    - its corresponding backing filesystem will be located at `./rude-store`
+- run `make unmount` when you are done
+- run `make fg` to run the filesystem in foreground;
+  this will allow you to see debugging messages.
+
+
 ## To do
 - testing harness
   - add google test
