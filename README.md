@@ -30,8 +30,10 @@ Openssl is needed for the hash functions. I'm picking up cryptographically
 strong functions out of laziness.
 
 ## To do
-- proper testing harness
-- locking during critical deduplication replacement
+- testing harness
+  - add google test
+  - test multiple hash functions
+- add locking during critical deduplication replacement
 - large scale testing, e.g., with side-by-side pyvenv installs
 - properly review similar solutions
 - stats tool (dedup rates, space savings)

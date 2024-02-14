@@ -7,5 +7,6 @@ int hash_file(const char * path,          // in
 	      char * digest               // out
 	      );
 
-void print_hash(const unsigned char * md,
-		const size_t size);
+char * sprint_hash(char * output,
+		   const unsigned char * md,
+		   const size_t mdlen);

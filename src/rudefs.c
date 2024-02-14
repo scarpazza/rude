@@ -281,11 +281,16 @@ static int rude_chmod(const char *path, mode_t new_mode,
       {
 	printf("rudefs: de-duplicating %s and link from hash-store, %s\n",
 	       path, options.hash_function);
-	static unsigned char digest[EVP_MAX_MD_SIZE+1];
-	res = hash_file(path+1, options.hash_function, digest);
-	if (res < 0) return res;
+	unsigned char digest[EVP_MAX_MD_SIZE+1];
+	unsigned char hex_digest[EVP_MAX_MD_SIZE*2+1];
+	const int mdlen = hash_file(path+1, options.hash_function, digest);
+	if (mdlen < 0) return res;
+	if (mdlen ==0) return -EINVAL;
 
-	printf("hash %s\n", digest);
+	printf("hash %s (%u bits, %u chars, %u hex digits)",
+	       sprint_hash(hex_digest, digest, mdlen),
+	       mdlen*8, mdlen, mdlen*2);
+	printf(";\n");
 	// unfinished
 	return -ENOSYS;
       }
