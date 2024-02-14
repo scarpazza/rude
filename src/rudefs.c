@@ -17,6 +17,7 @@
 #include <stddef.h>
 #include <assert.h>
 #include <unistd.h> //chdir
+#include <sys/stat.h> // mode_t
 
 /*
  * Command line options
@@ -56,14 +57,14 @@ static int rude_getattr(const char *path,
   memset(stbuf, 0, sizeof(struct stat));
 
   if (chdir(options.backing) != 0)
-    return -EBADFD; // this is the errno I use when the backing fs is not there
+    return -ENOMEDIUM; // this is the errno I use when the backing fs is not there
 
   if (fi)
     res = fstat(fi->fh, stbuf);
   else if (strcmp(path, "/") == 0)
     res = lstat("root", stbuf);
   else {
-    if ( chdir("root") != 0) return -EBADFD;
+    if ( chdir("root") != 0) return -ENOMEDIUM;
     res = lstat(path+1, stbuf);
   }
   if (res == -1)
@@ -84,8 +85,8 @@ static int rude_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
   struct dirent *entry;
 
-  if ( chdir(options.backing) != 0 ) return -EBADFD;
-  if ( chdir("root") != 0)           return -EBADFD;
+  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)           return -ENOMEDIUM;
   DIR * dir;
 
   printf("rude_readdir %s...\n", path);
@@ -109,8 +110,8 @@ static int rude_open(const  char *path,
 {
   int fd;
   fprintf(stderr, "rude_open: %s\n", path);
-  if ( chdir(options.backing) != 0 ) return -EBADFD;
-  if ( chdir("root") != 0)           return -EBADFD;
+  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)           return -ENOMEDIUM;
 
   if (strcmp(path, "/") == 0)
     fd = open(".", fi->flags);
@@ -161,8 +162,8 @@ static int rude_mkdir(const char *path, mode_t mode)
   int res;
   fprintf(stderr, "rude_mkdir: %s\n", path);
   if (strcmp(path, "/") == 0) return 0; // nothing to do
-  if ( chdir(options.backing) != 0 ) return -EBADFD;
-  if ( chdir("root") != 0)           return -EBADFD;
+  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)           return -ENOMEDIUM;
   res = mkdir(path+1, mode); // TO DO SPLIT?
   if (res == -1) return -errno;
   return 0;
@@ -172,8 +173,8 @@ static int rude_rmdir(const char *path)
 {
   int res;
   if (strcmp(path, "/") == 0) return -EPERM; // you can't delete root
-  if ( chdir(options.backing) != 0 ) return -EBADFD;
-  if ( chdir("root") != 0)           return -EBADFD;
+  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)           return -ENOMEDIUM;
   res = rmdir(path+1);
   if (res == -1) return -errno;
   return 0;
@@ -220,8 +221,8 @@ static int rude_mknod(const char *path, mode_t mode, dev_t rdev)
 {
   int res;
   if (strcmp(path, "/") == 0)        return -EPERM; // nothing to do
-  if ( chdir(options.backing) != 0 ) return -EBADFD;
-  if ( chdir("root") != 0)           return -EBADFD;
+  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)           return -ENOMEDIUM;
 
   if (S_ISFIFO(mode))
     res = mkfifo(path+1, mode);
@@ -241,8 +242,8 @@ static int rude_utimens(const char *path, const struct timespec ts[2],
   if (fi)
     res = futimens(fi->fh, ts);
   else {
-    if ( chdir(options.backing) != 0 ) return -EBADFD;
-    if ( chdir("root") != 0)           return -EBADFD;
+    if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
+    if ( chdir("root") != 0)           return -ENOMEDIUM;
 
     if (strcmp(path, "/") == 0) {
       res = utimensat(0, ".", ts, AT_SYMLINK_NOFOLLOW);
@@ -255,12 +256,45 @@ static int rude_utimens(const char *path, const struct timespec ts[2],
   return 0;
 }
 
+static int rude_chmod(const char *path, mode_t new_mode,
+		     struct fuse_file_info *fi)
+{
+  int res;
+
+  if ( chdir(options.backing) != 0 ) return -ENOMEDIUM;
+  if ( chdir("root") != 0)           return -ENOMEDIUM;
+  if (strcmp(path, "/") == 0)        return -EPERM;
+  /*if(fi)
+    res = fchmod(fi->fh, mode); */
+
+  struct stat old;
+  lstat(path+1, &old);
+  if ( ((old.st_mode & S_IWUSR) == 0) && ((new_mode & S_IWUSR) >0))
+    printf("Should duplicate and pull from to hash-store\n");
+  else
+    if ( ((old.st_mode & S_IWUSR) > 0) && ((new_mode & S_IWUSR) ==0))
+      printf("Should de-duplicate and link from hash-store\n");
+
+  {
+    printf("rude_chmod: %s\n", path);
+    res = chmod(path+1, new_mode);
+  }
+
+  if (res == -1)
+    return -errno;
+  return 0;
+}
+
+
+
 static const struct fuse_operations rude_oper = {
   .init          = rude_init,
   .getattr	 = rude_getattr,
+  .chmod         = rude_chmod,
   .mkdir         = rude_mkdir,
   .rmdir         = rude_rmdir,
   .readdir	 = rude_readdir,
+
   .flush         = rude_flush,
   .lseek         = rude_lseek,
   .open		 = rude_open,
