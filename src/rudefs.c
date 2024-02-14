@@ -118,9 +118,11 @@ static int rude_open(const  char *path,
   return 0;
 }
 
+
 static int rude_read(const char *path, char *buf,
 		     size_t size, off_t offset,
 		     struct fuse_file_info *fi)
+// pure pass-through
 {
   int res;
   (void) path;
@@ -130,12 +132,59 @@ static int rude_read(const char *path, char *buf,
   return res;
 }
 
+static off_t rude_lseek(const char *path, off_t off, int whence, struct fuse_file_info *fi)
+// pure pass-through
+{
+  off_t res;
+  (void) path;
+  res = lseek(fi->fh, off, whence);
+  if (res == -1)
+    return -errno;
+  return res;
+}
+
+static int rude_release(const char *path, struct fuse_file_info *fi)
+{
+  (void) path;
+  close(fi->fh);
+  return 0;
+}
+
+
+static int rude_mkdir(const char *path, mode_t mode)
+{
+  int res;
+  fprintf(stderr, "rude_mkdir: %s\n", path);
+  if (strcmp(path, "/") == 0) return 0; // nothing to do
+  if ( chdir(options.backing) != 0 ) return -EBADFD;
+  if ( chdir("root") != 0)           return -EBADFD;
+  res = mkdir(path+1, mode); // TO DO SPLIT?
+  if (res == -1) return -errno;
+  return 0;
+}
+
+static int rude_rmdir(const char *path)
+{
+  int res;
+  if (strcmp(path, "/") == 0) return -EPERM; // you can't delete root
+  if ( chdir(options.backing) != 0 ) return -EBADFD;
+  if ( chdir("root") != 0)           return -EBADFD;
+  res = rmdir(path+1);
+  if (res == -1) return -errno;
+  return 0;
+}
+
+
 static const struct fuse_operations rude_oper = {
 	.init           = rude_init,
 	.getattr	= rude_getattr,
+	.mkdir          = rude_mkdir,
+	.rmdir          = rude_rmdir,
 	.readdir	= rude_readdir,
+	.lseek          = rude_lseek,
 	.open		= rude_open,
 	.read		= rude_read,
+	.release        = rude_release,
 };
 
 static void show_help(const char *progname)
