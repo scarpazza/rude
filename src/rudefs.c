@@ -42,6 +42,7 @@ static struct options {
   const char * hash_function;
   int          show_help;
   int          reclamation_stingy;
+  int          collision_complacent;
 } options;
 
 #define OPTION(t, p)                           \
@@ -50,6 +51,7 @@ static const struct fuse_opt option_spec[] = {
 	OPTION("--backing=%s", backing),
 	OPTION("--hashfn=%s",  hash_function),
 	OPTION("--stingy",     reclamation_stingy),
+	OPTION("--complacent", collision_complacent),
 	OPTION("-h", show_help),
 	OPTION("--help", show_help),
 	FUSE_OPT_END
@@ -84,6 +86,9 @@ int kill_inode(const ino_t victim)
   return -ENOENT;
 }
 
+
+
+
 int deduplicate(const char * orig_path,
 		const char * hex_digest)
 {
@@ -104,6 +109,9 @@ int deduplicate(const char * orig_path,
       goto error;
     }
   } else {
+
+    int rc = identical(src_path, store_path);
+    
     // store file already exists - delete src
     if ( 0 != remove(src_path) ) {
       fprintf(stderr, "rudefs: deduplicate: remove failed: %s\n", strerror (errno));
@@ -458,7 +466,8 @@ static void show_help(const char *progname)
   printf("File-system specific options:\n"
 	 "    --backing=<s>      path to the backing\n"
 	 "    --hashfn=<s>       hash function to use, e.g., SHA256\n"
-	 "    --stingy           use the 'stingy' reclamation policy rather than the prodigal (default)"
+	 "    --stingy           use the 'stingy' reclamation policy rather than the prodigal (default)\n"
+	 "    --complacent       use the 'complacent' hash conflict detection policy\n"
 	 "\n");
 }
 

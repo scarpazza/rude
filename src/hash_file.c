@@ -49,6 +49,7 @@ int hash_file(const char * path,
   // Memory-map the file.
   const char * mapped = mmap (0, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
   if (mapped == MAP_FAILED) {
+    close(fd);
     fprintf(stderr, "rudefs: mmap %s failed: %s", path, strerror (errno));
     return -errno;
   }
@@ -56,9 +57,64 @@ int hash_file(const char * path,
   size_t mdlen;
   if ( EVP_Q_digest(NULL, hash_function, NULL,
 		    mapped, filesize, digest, &mdlen) == 0 ) {
+    close(fd);
+    munmap(mapped, filesize);
     fprintf(stderr, "rudefs: EVP_Q_digest %s %s failed\n", path, hash_function );
     return -EKEYREJECTED;
   }
   digest[mdlen] = 0;
+  close(fd);
+  munmap(mapped, filesize);
   return mdlen;
+}
+
+
+/* return codes:
+   - negative: failure, -errno
+   - 1: test completed, files match
+   - 0: test completed, files DO NOT matching
+*/
+int identical( const char * const path1, const char * const path2 )
+{
+  struct stat filestat1, filestat2;
+  const int fd1 = open (path1, O_RDONLY);
+  const int fd2 = open (path2, O_RDONLY);
+  if (fd1 < 0 || fd2 < 0) {
+    fprintf(stderr, "rudefs: identical: open failed: %s\n", strerror (errno));
+    return -errno;
+  }
+
+
+  // File size must be known before mmapping
+  if ( fstat (fd1, & filestat1) < 0  ||  fstat (fd2, & filestat2) < 0 ) {
+    fprintf(stderr, "rudefs: identical: fstat failed: %s\n", strerror (errno));
+    return -errno;
+  }
+
+  if ( filestat1.st_size != filestat2.st_size ) {
+    fprintf(stderr, "rudefs: identical: sizes differ %lu != %lu\n", (long unsigned) filestat1.st_size, (long unsigned) filestat2.st_size );
+    // no need to compare contents - size differs
+    close(fd1);
+    close(fd2);
+    return 0;
+  }
+
+  // Memory-map the file.
+  const char * mapped1 = mmap (0, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd1, 0);
+  const char * mapped2 = mmap (0, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd2, 0);
+
+  if ( mapped1 == MAP_FAILED || mapped2 == MAP_FAILED) {
+    fprintf(stderr, "rudefs: identical: mmap failed: %s\n", strerror (errno));
+    close(fd1);
+    close(fd2);
+    return -errno;
+  }
+
+  const int cmp = memcmp(mapped1, mapped2, filestat1.st_size);
+  munmap(mapped1, filestat1.st_size);
+  munmap(mapped2, filestat1.st_size);
+  close(fd1);
+  close(fd2);
+
+  return (cmp==0) ? 1 : 0;
 }

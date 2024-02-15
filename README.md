@@ -37,6 +37,44 @@ strong functions out of laziness.
 - run `make fg` to run the filesystem in foreground;
   this will allow you to see debugging messages.
 
+## Hash function
+
+You are free to choose any hash function supported by openssl.
+To list what functions are available, simply type `openssl`
+and look for the "Message Digest" section in its output:
+
+        Message Digest commands (see the `dgst' command for more details)
+        blake2b512        blake2s256        md4               md5
+        rmd160            sha1              sha224            sha256
+        sha3-224          sha3-256          sha3-384          sha3-512
+        sha384            sha512            sha512-224        sha512-256
+        shake128          shake256          sm3
+
+Any of these functions can be passed to the `--hashfn=...` command line option that `rudefs` takes.
+
+## Hash Collisions
+
+Since `rudefs` uses a hash-indexed flat file store, one must decide
+how to handle hash collisions, no matter how unlikely they are.
+
+I let the user decide whether they want a 'complacent' or 'thorough'
+collision detection policy. The default is thorough. You can switch to
+'complacent' by specifying the `--complacent` command line switch to
+`rudefs`.
+
+Under the thorough policy, if a new file sent for deduplication has
+its hash already in the store, we compare it bitwise with the file in
+the store. If the comparison succeeds, we deduplicate the new file,
+i.e., we replace it with a hard link to the one already in the store.
+
+If the comparison fails, the new file is simply left alone, and no
+deduplication is attempted.
+
+Credits: the "ship" and "plane" JPEG files used in the test and
+crafted to have an MD5 collision are courtesy of [Maarten
+Bedewes](https://crypto.stackexchange.com/users/1172/maarten-bodewes)
+and are presented in a [Crypto stack exchange
+post](https://crypto.stackexchange.com/questions/1434/are-there-two-known-strings-which-have-the-same-md5-hash-value).
 
 ## To do
 - testing harness

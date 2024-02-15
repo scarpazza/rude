@@ -24,8 +24,7 @@ void test_hash( const char * algo,
   ASSERT_EQ( mdlen, hash_len_bits/8 );
   char hex_digest [EVP_MAX_MD_SIZE*2+1];
 
-  ASSERT_EQ( sprint_hash(hex_digest, digest, mdlen),
-	     known_hash);
+  ASSERT_EQ( sprint_hash(hex_digest, digest, mdlen), known_hash);
 
   ASSERT_EQ( unlink(fname), 0);
 }
@@ -41,3 +40,40 @@ TEST(hash, sha256sum ) {
 TEST(hash, md5sum ) {
   test_hash("MD5", 128, "f45f6f3168087f329f6fdbb61ef3654d");
 }
+
+TEST(hash, ship_plane_collision ) {
+  unsigned char digest1     [EVP_MAX_MD_SIZE+1];
+  unsigned char digest2     [EVP_MAX_MD_SIZE+1];
+
+  const int mdlen1 = hash_file("tests/ship.jpg",  "md5", digest1);
+  const int mdlen2 = hash_file("tests/plane.jpg", "md5", digest2);
+
+  ASSERT_EQ( mdlen1, 16 );
+  ASSERT_EQ( mdlen2, 16 );
+
+  ASSERT_EQ( memcmp(digest1, digest2, 16), 0);
+
+  char hex_digest [EVP_MAX_MD_SIZE*2+1];
+  const std::string known_hash("253dd04e87492e4fc3471de5e776bc3d");
+  ASSERT_EQ( sprint_hash(hex_digest, digest1, mdlen1), known_hash);
+}
+
+
+TEST(identical, file_not_found ) {
+  ASSERT_EQ( identical("file that doesnt exist","other file"), -ENOENT);
+}
+
+TEST(identical, same_file ) {
+  ASSERT_TRUE( identical("README.md","README.md"));
+}
+
+TEST(identical, different_files ) {
+  ASSERT_FALSE( identical("src/rudefs.c","src/rudefs.h"));
+}
+
+/*
+TEST(identical, ok ) {
+
+  ASSERT_EQ( identical(fname), 0);
+}
+}*/
