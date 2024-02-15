@@ -1,14 +1,19 @@
+DEPS := fuse3 openssl gtest_main
+test: rudefs rude-gtests
+	./rude-gtests
 
 %.o: %.c
-	gcc -c $< -o $@ \
-	`pkg-config fuse3   --cflags` \
-	`pkg-config openssl --cflags`
+	gcc -c $< -o $@ `pkg-config --cflags $(DEPS)`
+
+%.o: %.cpp
+	g++ -c $< -o $@ `pkg-config --cflags $(DEPS)`
 
 
 rudefs: src/rudefs.o src/hash_file.o
-	gcc $^ -o $@ \
-	`pkg-config fuse3   --libs` \
-	`pkg-config openssl --libs`
+	gcc $^ -o $@ `pkg-config --libs $(DEPS)`
+
+rude-gtests: src/tests.o src/hash_file.o
+	g++ $^ -o $@ `pkg-config --libs $(DEPS)`
 
 rude-mnt:
 	mkdir -p $@

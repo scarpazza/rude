@@ -7,9 +7,10 @@
 #define ROOT_SUBDIR  "root"
 
 
-int hash_file(const char * path,          // in
-	      const char * hash_function, // in
-	      char * digest               // out
+int hash_file(const    char * path,          // in
+	      const    char * hash_function, // in
+	      unsigned char * digest         // out
+	      /* buffer must be EVP_MAX_MD_SIZE+1 long or longer  */
 	      );
 
 char * sprint_hash(char * output,

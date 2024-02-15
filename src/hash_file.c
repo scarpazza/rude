@@ -28,7 +28,7 @@ char * sprint_hash(char * output, // must be at least mdlen*2+1 long
 */
 int hash_file(const char * path,
 	      const char * hash_function,
-	      char * digest /* buffer must be EVP_MAX_MD_SIZE+1 long or longer  */
+	      unsigned char * digest /* buffer must be EVP_MAX_MD_SIZE+1 long or longer  */
 	      )
 {
   struct stat filestat;

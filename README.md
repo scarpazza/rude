@@ -19,10 +19,10 @@ None. This was just made for fun.  If you use it for anything else,
 you are rollerskating naked in a dark room full of sharp glass shards.
 
 ## Prerequisites
-Before you try, ensure you have the fuse3 and openssl libraries
-development packages installed, e.g.:
+Before you try, ensure you have the fuse3 and openssl packages
+installed, plus the Google test framework, e.g.:
 
-        sudo apt install fuse3 libfuse3-dev libssl-dev
+        sudo apt install fuse3 libfuse3-dev libssl-dev libgtest-dev
 
 or the equivalent packages for your distribution.
 

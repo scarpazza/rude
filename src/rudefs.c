@@ -6,6 +6,7 @@
 // + rename
 // + opendir
 // + pedantic vs permissive mode: upon store, fcomp
+// + kill_inode could be made asynchronous
 // + test race conditions
 
 #define _DEFAULT_SOURCE
@@ -31,13 +32,13 @@
 /*
  * Command line options
  *
- * We can't set default values for the char* fields here because
+ * Don't set default values for the char* fields here because
  * fuse_opt_parse would attempt to free() them when the user specifies
  * different values on the command line.
  */
 static struct options {
   const char * backing;                  // backing store - requested
-  char         real_backing[PATH_MAX+1]; // backing store - realpath
+  char         real_backing[PATH_MAX+1]; // backing store - realpath; not set by fuse_opt_parse
   const char * hash_function;
   int          show_help;
   int          reclamation_stingy;
@@ -347,7 +348,7 @@ static int rude_mknod(const char *path, mode_t mode, dev_t rdev)
   int res;
   if (strcmp(path, "/") == 0)             return -EPERM; // nothing to do
   if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
-  if ( chdir(ROOT_SUBDIR) != 0)                return -ENOMEDIUM;
+  if ( chdir(ROOT_SUBDIR) != 0)           return -ENOMEDIUM;
 
   if (S_ISFIFO(mode))
     res = mkfifo(path+1, mode);
