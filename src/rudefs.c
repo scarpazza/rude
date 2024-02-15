@@ -110,8 +110,16 @@ int deduplicate(const char * orig_path,
     }
   } else {
 
-    int rc = identical(src_path, store_path);
-    
+    if (!options.collision_complacent) {
+      fprintf(stderr, "rudefs: thorough mode - checking for hash collisions\n");
+      int ret;
+      if ((ret = identical(src_path, store_path)) <=0 )
+	return ret;
+    } else {
+      fprintf(stderr, "rudefs: complacent mode - not checking for hash collisions\n");
+
+    }
+
     // store file already exists - delete src
     if ( 0 != remove(src_path) ) {
       fprintf(stderr, "rudefs: deduplicate: remove failed: %s\n", strerror (errno));
@@ -127,6 +135,7 @@ int deduplicate(const char * orig_path,
   // to do release lock
   printf("rudefs: SUCCESS de-duplicating %s -> %s\n", src_path, store_path);
   return 0;
+
  error:
   // release lock
   return -errno;
