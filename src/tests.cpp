@@ -71,9 +71,46 @@ TEST(identical, different_files ) {
   ASSERT_FALSE( identical("src/rudefs.c","src/rudefs.h"));
 }
 
-/*
-TEST(identical, ok ) {
+TEST(identical, matching_files ) {
+  using namespace std;
+  const string fname1("gtests-example1.txt"), fname2("gtests-example2.txt");
 
-  ASSERT_EQ( identical(fname), 0);
+  ofstream f1, f2;
+  f1.open ( fname1, ofstream::out | ofstream::binary);
+  f2.open ( fname2, ofstream::out | ofstream::binary);
+  for (const auto fp : {&f1, &f2} ) {
+    ASSERT_TRUE(*fp);
+    (*fp) << "Sample file contents for match testing...";
+    fp->close();
+    ASSERT_TRUE(*fp);
+  }
+
+  ASSERT_EQ( identical(fname1.c_str(), fname2.c_str()), 1);
+
+  for (const auto fnp : {&fname1, &fname2} )
+    ASSERT_EQ( unlink(fnp->c_str()), 0);
 }
-}*/
+
+TEST(basic, add_file ) {
+  using namespace std;
+  system("make mount");
+  const string
+    fname("rude-mnt/gtests-new-file1.txt"),
+    backing_fname("rude-store/root/gtests-new-file1.txt"),
+    contents("add_file gtest: sample file contents for match testing...");
+
+  ofstream f;
+  f.open ( fname, ofstream::out | ofstream::binary);
+  ASSERT_TRUE(f);
+  f << contents;
+  f.close();
+  ASSERT_TRUE(f);
+  system("make unmount");
+
+  ifstream fi(backing_fname,ifstream::binary);
+  ASSERT_TRUE(fi);
+  char readback[1001];
+  readback[ fi.readsome(readback, 1000) ]=0;
+  ASSERT_EQ( contents, readback);
+  ASSERT_EQ( unlink(backing_fname.c_str()), 0);
+}
