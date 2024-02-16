@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <fcntl.h> // open
+#include <unistd.h> // close
 #include <stdlib.h>
 #include <ctype.h>
 #include <sys/stat.h> // mode_t, fstat, lstat
@@ -21,6 +22,17 @@ char * sprint_hash(char * output, // must be at least mdlen*2+1 long
   return output;
 }
 
+
+int hash_string( const    char * data,
+		 const    size_t len,
+	         const    char * hash_function,
+	         unsigned char * digest /* buffer must be EVP_MAX_MD_SIZE+1 long or longer  */
+		 )
+{
+  size_t mdlen;
+  return ( EVP_Q_digest(NULL, hash_function, NULL, data, len, digest, &mdlen) ?
+	   mdlen : 0 );
+}
 
 /* return codes:
    - negative: failure, -errno
@@ -46,7 +58,7 @@ int hash_file(const char * path,
   const size_t filesize = filestat.st_size;
 
   // Memory-map the file.
-  const char * mapped = mmap (0, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
+  char * const mapped = mmap (0, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
   if (mapped == MAP_FAILED) {
     close(fd);
     fprintf(stderr, "rudefs: mmap %s failed: %s\n", path, strerror (errno));
@@ -99,8 +111,8 @@ int identical( const char * const path1, const char * const path2 )
   }
 
   // Memory-map the file.
-  const char * mapped1 = mmap (0, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd1, 0);
-  const char * mapped2 = mmap (0, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd2, 0);
+  char * const mapped1 = mmap (0, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd1, 0);
+  char * const mapped2 = mmap (0, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd2, 0);
 
   if ( mapped1 == MAP_FAILED || mapped2 == MAP_FAILED) {
     fprintf(stderr, "rudefs: identical: mmap failed: %s\n", strerror (errno));

@@ -5,6 +5,12 @@
 #define STORE_SUBDIR "hashmap"
 #define ROOT_SUBDIR  "root"
 
+int hash_string( const char *    data,
+		 const size_t    len,
+	         const char *    hash_function,
+	         unsigned char * digest /* buffer must be EVP_MAX_MD_SIZE+1 long or longer  */
+		 );
+
 int hash_file(const    char * path,          // in
 	      const    char * hash_function, // in
 	      unsigned char * digest         // out

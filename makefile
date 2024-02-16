@@ -6,7 +6,7 @@ test: rudefs rude-gtests
 	gcc -c $< -o $@ `pkg-config --cflags $(DEPS)`
 
 %.o: %.cpp
-	g++ -c $< -o $@ `pkg-config --cflags $(DEPS)`
+	g++ --std=c++20 -c $< -o $@ `pkg-config --cflags $(DEPS)`
 
 
 rudefs: src/rudefs.o src/hash_file.o
@@ -20,7 +20,6 @@ rude-mnt:
 
 rude-store:
 	mkdir -p $@/root
-	echo "This is a test file" > $@/root/samplefile
 	mkdir -p $@/hashmap
 
 
@@ -32,6 +31,9 @@ fg-md5: rudefs rude-mnt rude-store
 	echo "Mounting in foreground..."
 	./rudefs -f --stingy --backing=rude-store --hashfn=md5 $(shell pwd)/rude-mnt
 
+reset:
+	rm -rfv rude-store
+	$(MAKE) rude-store
 
 mount: rudefs rude-mnt rude-store
 	./rudefs --backing=$(shell pwd)/rude-store $(shell pwd)/rude-mnt
