@@ -34,14 +34,13 @@ int hash_file(const char * path,
   struct stat filestat;
   const int fd = open (path, O_RDONLY);
   if (fd < 0) {
-    fprintf(stderr, "rudefs: hash_file: open %s failed: %s",
-	    path, strerror (errno));
+    fprintf(stderr, "rudefs: hash_file: open %s failed: %s\n", path, strerror (errno));
     return -errno;
   }
 
   // File size must be known before mmapping
   if ( fstat (fd, & filestat) < 0) {
-    fprintf(stderr, "rudefs: stat %s failed: %s", path, strerror (errno));
+    fprintf(stderr, "rudefs: stat %s failed: %s\n", path, strerror (errno));
     return -errno;
   }
   const size_t filesize = filestat.st_size;
@@ -50,7 +49,7 @@ int hash_file(const char * path,
   const char * mapped = mmap (0, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
   if (mapped == MAP_FAILED) {
     close(fd);
-    fprintf(stderr, "rudefs: mmap %s failed: %s", path, strerror (errno));
+    fprintf(stderr, "rudefs: mmap %s failed: %s\n", path, strerror (errno));
     return -errno;
   }
 

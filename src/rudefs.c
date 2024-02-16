@@ -1,10 +1,9 @@
 // TO DO:
 // when chmod u-w, remove w from also g and o
-// + manage hash conflicts at all?
-// + stingy vs prodigal mode
 // + stats
 // + rename
 // + opendir
+// + locks
 // + pedantic vs permissive mode: upon store, fcomp
 // + kill_inode could be made asynchronous
 // + test race conditions
