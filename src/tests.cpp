@@ -9,6 +9,8 @@ extern "C" {
 }
 
 
+// TO DO: add hardlink-counting tests when chmodding+w
+
 // helper functions
 namespace rude {
   namespace test {
@@ -126,7 +128,7 @@ TEST(identical, same_file ) {
 }
 
 TEST(identical, different_files ) {
-  ASSERT_FALSE( identical("src/rudefs.c","src/rudefs.h"));
+  ASSERT_FALSE( identical("src/rudefs.cpp","src/rudefs.h"));
 }
 
 TEST(identical, matching_files ) {
@@ -144,7 +146,7 @@ TEST(identical, matching_files ) {
 
 TEST(basic, add_file_readback ) {
   using namespace std;
-  system("make reset");  
+  system("make reset");
   system("make mount");
   const string
     fname("rude-mnt/gtests-new-file1.txt"),
@@ -239,7 +241,6 @@ TEST(basic, add_10_file_to_store ) {
     char s[fname_templ.size()];
     sprintf(s, fname_templ.c_str(), i);
     ASSERT_EQ( unlink(s), 0);
-    // TO DO CHECK LINK COUNT
   }
 
   system("make unmount");

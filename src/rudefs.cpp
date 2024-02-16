@@ -89,7 +89,7 @@ int kill_inode(const ino_t victim)
 
 
 int deduplicate(const char * orig_path,
-		const char * hex_digest)
+		const unsigned char * hex_digest)
 {
   struct stat st;
   if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
@@ -183,7 +183,7 @@ static int rude_unlink(const char *path)
 }
 
 
-static void *rude_init(struct fuse_conn_info *conn,
+static void *rude_init( struct fuse_conn_info *conn,
 			struct fuse_config *cfg)
 {
   (void) conn;
@@ -502,9 +502,7 @@ int main(int argc, char *argv[])
   int ret;
   struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
 
-  /* Set defaults -- we have to use strdup so that
-     fuse_opt_parse can free the defaults if other
-     values are specified */
+  /* Set defaults -- we have to use strdup so that fuse_opt_parse can free the defaults if other values are specified */
   options.backing       = strdup("rudefs-store");
   options.hash_function = strdup("SHA256");
 
@@ -512,11 +510,8 @@ int main(int argc, char *argv[])
   if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1)
     return 1;
 
-  /* When --help is specified, first print our own file-system
-     specific help text, then signal fuse_main to show
-     additional help (by adding `--help` to the options again)
-     without usage: line (by setting argv[0] to the empty
-     string) */
+  /* When --help is specified, first print our own file-system specific help text, then signal fuse_main to show
+     additional help (by adding `--help` to the options again) without usage: line (by setting argv[0] to the empty string) */
   if (options.show_help) {
     show_help(argv[0]);
     assert(fuse_opt_add_arg(&args, "--help") == 0);

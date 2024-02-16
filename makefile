@@ -8,6 +8,8 @@ test: rudefs rude-gtests
 %.o: %.cpp
 	g++ --std=c++20 -c $< -o $@ `pkg-config --cflags $(DEPS)`
 
+clean:
+	rm -rfv *.o ./rude-gtests ./rudefs
 
 rudefs: src/rudefs.o src/hash_file.o
 	gcc $^ -o $@ `pkg-config --libs $(DEPS)`
