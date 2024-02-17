@@ -1,13 +1,28 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include <fstream>
+#include <string>
 #include <sys/stat.h> // chmod
 #include <stdexcept> // runtime_error
 #include <ranges> // iota
-extern "C" {
-#include "rudefs.h"
-}
+#include <fcntl.h> // open
+#include <sys/file.h> // flock
 
+#include "rudefs.h"
+
+
+
+TEST(basic, lock_unlock ) {
+  using namespace std;
+  FLock fl(std::string("gtest-lockfile"));
+
+  EXPECT_NO_THROW( fl.lock() );
+  EXPECT_NO_THROW( fl.unlock() );
+
+  for (int i: std::views::iota(0,10)) {
+    std::lock_guard g(fl);
+  }
+}
 
 // TO DO: add hardlink-counting tests when chmodding+w
 
@@ -31,6 +46,8 @@ namespace rude {
     void populate(const std::string & fname, const std::string & contents ) {
       std::ofstream f( fname, std::ofstream::out | std::ofstream::binary);
       ASSERT_TRUE( f.is_open() );
+      if (! f.is_open())
+	throw std::runtime_error( std::string(fname) + " " + fname );
       ASSERT_TRUE( f );
       f << contents;
       f.close();
@@ -39,7 +56,7 @@ namespace rude {
 
     void expect_readback( const std::string & fname, const std::string & contents )
     {
-      std::ifstream fi( fname, std::ifstream::binary);     ASSERT_TRUE( fi.is_open() );
+      std::ifstream fi( fname, std::ifstream::binary);     ASSERT_TRUE( fi.is_open() ) << "readback unable to open "<< fname;
       fi.seekg(0, std::ios::end);                          ASSERT_TRUE( fi );
       const auto size = fi.tellg();                        ASSERT_GT(size, 0 );
       ASSERT_TRUE( fi );
@@ -58,7 +75,9 @@ namespace rude {
       unsigned char digest [EVP_MAX_MD_SIZE+1];
       char hex_digest      [EVP_MAX_MD_SIZE*2+1];
       const int mdlen = hash_file(fname.c_str(), algo, digest);
-      if (mdlen < 0) throw std::runtime_error( std::string( __FUNCTION__ ) + " invoking hash_file: "
+      if (mdlen < 0) throw std::runtime_error( std::string( __FUNCTION__ )
+					       + " invoking hash_file: "
+					       + fname + ": "
 					       + strerror(errno) );
 
       EXPECT_EQ( mdlen, (hash_len_bits/8) );
@@ -180,8 +199,6 @@ TEST(basic, add_1_file_to_store ) {
 
   const string hash_fname = hashmap_dir + file_hash_hex(fname, 256, "sha256");
 
-  system("make unmount");
-
   // check backing file - now a hard link
   expect_readback(backing_fname, contents );
 
@@ -189,6 +206,7 @@ TEST(basic, add_1_file_to_store ) {
   expect_readback(hash_fname, contents);
 
   // check target inodes correct
+  std::cerr << "\t " << backing_fname << " vs " << hash_fname << "\n";
   expect_same_inode(backing_fname, hash_fname );
 
   // check hard link counts correct
@@ -196,6 +214,8 @@ TEST(basic, add_1_file_to_store ) {
   expect_n_hardlinks(hash_fname,    2 );
 
   ASSERT_EQ( unlink(backing_fname.c_str()), 0);
+
+  system("make unmount");
 
 }
 

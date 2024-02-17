@@ -1,18 +1,16 @@
 DEPS := fuse3 openssl gtest_main
+
 test: rudefs rude-gtests
 	./rude-gtests
-
-%.o: %.c
-	gcc -c $< -o $@ `pkg-config --cflags $(DEPS)`
 
 %.o: %.cpp
 	g++ --std=c++20 -c $< -o $@ `pkg-config --cflags $(DEPS)`
 
 clean:
-	rm -rfv *.o ./rude-gtests ./rudefs
+	rm -rfv src/*.o ./rude-gtests ./rudefs
 
 rudefs: src/rudefs.o src/hash_file.o
-	gcc $^ -o $@ `pkg-config --libs $(DEPS)`
+	g++ $^ -o $@ `pkg-config --libs $(DEPS)`
 
 rude-gtests: src/tests.o src/hash_file.o
 	g++ $^ -o $@ `pkg-config --libs $(DEPS)`
@@ -36,6 +34,7 @@ fg-md5: rudefs rude-mnt rude-store
 reset:
 	rm -rfv rude-store
 	$(MAKE) rude-store
+	sync
 
 mount: rudefs rude-mnt rude-store
 	./rudefs --backing=$(shell pwd)/rude-store $(shell pwd)/rude-mnt

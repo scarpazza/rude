@@ -10,6 +10,37 @@
 
 #include "rudefs.h"
 
+
+FLock::FLock(const std::string & fn)
+  : fname(fn)
+  , fd ( open( fname.c_str(), O_CREAT | O_WRONLY,
+	       S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH ) ) {
+  if ( fd <0 )
+    throw std::runtime_error( std::string("FLock: unable to open ")
+			      + fname + ": " + strerror(errno) );
+}
+
+void FLock::lock() {
+  printf("FLock: lock %s...\n", fname.c_str());
+  if ( 0 != flock(fd, LOCK_EX) )
+    throw std::runtime_error( std::string("FLock: unable to acquire lock ")
+			      + fname + ": " + strerror(errno) );
+  printf("FLock: locked\n");
+}
+
+void FLock::unlock() {
+  printf("FLock: unlock %s...\n", fname.c_str());
+  if ( 0 != flock(fd, LOCK_UN) )
+    throw std::runtime_error( std::string("FLock: unable to acquire lock ")
+			      + fname + ": " + strerror(errno) );
+  printf("FLock: unlocked\n");
+};
+
+FLock::~FLock() {
+  unlink( fname.c_str() );
+}
+
+
 char * sprint_hash(char * output, // must be at least mdlen*2+1 long
 		   const  unsigned char * md,
 		   const  size_t mdlen
@@ -58,7 +89,7 @@ int hash_file(const char * path,
   const size_t filesize = filestat.st_size;
 
   // Memory-map the file.
-  char * const mapped = mmap (0, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
+  char * const mapped = (char*) mmap (nullptr, filesize, PROT_READ, MAP_PRIVATE, fd, 0);
   if (mapped == MAP_FAILED) {
     close(fd);
     fprintf(stderr, "rudefs: mmap %s failed: %s\n", path, strerror (errno));
@@ -111,8 +142,8 @@ int identical( const char * const path1, const char * const path2 )
   }
 
   // Memory-map the file.
-  char * const mapped1 = mmap (0, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd1, 0);
-  char * const mapped2 = mmap (0, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd2, 0);
+  char * const mapped1 = (char*) mmap (nullptr, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd1, 0);
+  char * const mapped2 = (char*) mmap (nullptr, filestat1.st_size, PROT_READ, MAP_PRIVATE, fd2, 0);
 
   if ( mapped1 == MAP_FAILED || mapped2 == MAP_FAILED) {
     fprintf(stderr, "rudefs: identical: mmap failed: %s\n", strerror (errno));

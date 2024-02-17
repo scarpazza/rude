@@ -1,12 +1,12 @@
 // TO DO:
-// when chmod u-w, remove w from also g and o
+// + when chmod u-w, remove w from also g and o
 // + stats
 // + rename
 // + opendir
-// + locks
+// + better locking
+// + parallel tests; test race conditions
 // + pedantic vs permissive mode: upon store, fcomp
 // + kill_inode could be made asynchronous
-// + test race conditions
 
 #define _DEFAULT_SOURCE
 
@@ -16,14 +16,17 @@
 #include <stdlib.h> // malloc
 #include <dirent.h>
 #include <fuse.h>
-#include <stdio.h>
-#include <string.h> //strdup
 #include <errno.h>
 #include <fcntl.h>
 #include <stddef.h>
-#include <assert.h>
 #include <unistd.h> //chdir
 #include <sys/stat.h> // mode_t, fstat, lstat
+
+#include <cassert>
+#include <string>
+#include <cstdio>
+#include <cstring>  // strdup
+#include <mutex>    // lock_guard
 #include "rudefs.h" // hash_file
 
 
@@ -88,11 +91,18 @@ int kill_inode(const ino_t victim)
 
 
 
+
 int deduplicate(const char * orig_path,
-		const unsigned char * hex_digest)
+		const char * hex_digest)
 {
   struct stat st;
   if ( chdir(options.real_backing) != 0 ) return -ENOMEDIUM;
+
+  std::string lock_fname(options.real_backing);
+  lock_fname += "/lock";
+  printf("rudefs: locking  %s\n", lock_fname.c_str() );
+
+  FLock fl(lock_fname);
 
   char src_path   [PATH_MAX+1];
   char store_path [PATH_MAX+1];
@@ -100,7 +110,8 @@ int deduplicate(const char * orig_path,
   snprintf(src_path,   PATH_MAX, "%s/%s",  ROOT_SUBDIR,  orig_path);
   printf("rudefs: de-duplicating %s -> %s\n", src_path, store_path);
 
-  // TO DO lock appropriately
+  std::lock_guard _(fl);
+
   if ( stat(store_path, &st) != 0 ) {
     // store file does not exist yet - move and link
     if ( rename(src_path, store_path) != 0 ) {
@@ -113,10 +124,9 @@ int deduplicate(const char * orig_path,
       fprintf(stderr, "rudefs: thorough mode - checking for hash collisions\n");
       int ret;
       if ((ret = identical(src_path, store_path)) <=0 )
-	return ret;
+	goto error;
     } else {
       fprintf(stderr, "rudefs: complacent mode - not checking for hash collisions\n");
-
     }
 
     // store file already exists - delete src
@@ -131,12 +141,12 @@ int deduplicate(const char * orig_path,
       goto error;
   }
 
-  // to do release lock
   printf("rudefs: SUCCESS de-duplicating %s -> %s\n", src_path, store_path);
   return 0;
 
  error:
-  // release lock
+  //flock(fd, LOCK_UN);
+  //close(fd);
   return -errno;
 }
 
@@ -241,7 +251,7 @@ static int rude_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 
   while ((entry = readdir(dir)) != NULL) {
     printf("rude_readdir: returning %s\n", entry->d_name);
-    filler(buf, entry->d_name, NULL, 0, 0);
+    filler(buf, entry->d_name, NULL, 0, fuse_fill_dir_flags(0) );
   }
   closedir(dir);
   return 0;
@@ -423,7 +433,7 @@ static int rude_chmod(const char *path,
 	printf("rudefs: de-duplicating %s and link from hash-store, %s\n",
 	       path, options.hash_function);
 	unsigned char digest     [EVP_MAX_MD_SIZE+1];
-	unsigned char hex_digest [EVP_MAX_MD_SIZE*2+1];
+	char          hex_digest [EVP_MAX_MD_SIZE*2+1];
 	const int mdlen = hash_file(path+1, options.hash_function, digest);
 	if (mdlen < 0) return res;
 	if (mdlen ==0) return -EINVAL;
@@ -448,24 +458,25 @@ static int rude_chmod(const char *path,
 
 
 static const struct fuse_operations rude_oper = {
-  .init          = rude_init,
-  .getattr	 = rude_getattr,
-  .chmod         = rude_chmod,
-  .mkdir         = rude_mkdir,
-  .rmdir         = rude_rmdir,
-  .readdir	 = rude_readdir,
-
-  .flush         = rude_flush,
-  .lseek         = rude_lseek,
-
-  .open		 = rude_open,
-  .read		 = rude_read,
-  .write	 = rude_write,
-
-  .mknod         = rude_mknod,
-  .unlink        = rude_unlink,
-  .release       = rude_release,
-  .utimens       = rude_utimens,
+    .getattr	   = rude_getattr,
+    .mknod         = rude_mknod,
+    .mkdir         = rude_mkdir,
+    .unlink        = rude_unlink,
+    .rmdir         = rude_rmdir,
+    // rename
+    .chmod         = rude_chmod,
+    // truncate
+    .open	   = rude_open,
+    .read	   = rude_read,
+    .write  	   = rude_write,
+    // statfs
+    .flush         = rude_flush,
+    .release       = rude_release,
+    // opendir
+    .readdir	   = rude_readdir,
+    .init          = rude_init,
+    .utimens       = rude_utimens,
+    .lseek         = rude_lseek,
 };
 
 static void show_help(const char *progname)
@@ -518,8 +529,7 @@ int main(int argc, char *argv[])
     args.argv[0][0] = '\0';
   }
 
-  if ( (ret = verify_backing(options.backing)) <0)
-    return ret;
+  if ( (ret = verify_backing()) <0) return ret;
 
   ret = fuse_main(args.argc, args.argv, &rude_oper, NULL);
   fuse_opt_free_args(&args);

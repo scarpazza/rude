@@ -1,6 +1,10 @@
+#include <string>
 #include <stddef.h> // size_t
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
+#include <stdexcept>
+#include <sys/file.h> // flock
+
 
 #define STORE_SUBDIR "hashmap"
 #define ROOT_SUBDIR  "root"
@@ -24,3 +28,14 @@ char * sprint_hash(char * output,
 int identical( const char * const path1,
 	       const char * const path2 );
 
+
+class FLock {
+private:
+  std::string fname;
+  int fd;
+public:
+  FLock(const std::string & fn);
+  void lock();
+  void unlock();
+  ~FLock();
+};
